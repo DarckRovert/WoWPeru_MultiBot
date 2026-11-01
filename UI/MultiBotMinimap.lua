@@ -4,7 +4,10 @@ if not MultiBot then return end
 
 do
   local BTN_NAME = "MultiBot_MinimapButton"
-  local RADIUS = 80 -- rayon d’ancrage au bord de la minimap
+  local RADIUS = 80 -- radio de anclaje canonico en coordenadas del Minimapa
+  local wasDragged = false
+  local dragStartX, dragStartY = 0, 0
+  local DRAG_THRESHOLD_SQ = 16 -- 4 pixeles de tolerancia fisica
 
   local function deg2rad(degrees)
     return degrees * math.pi / 180
@@ -24,7 +27,7 @@ do
       return
     end
 
-    local radius = RADIUS * (Minimap:GetEffectiveScale() / UIParent:GetEffectiveScale())
+    local radius = RADIUS
     local xOffset = math.cos(deg2rad(resolvedAngle)) * radius
     local yOffset = math.sin(deg2rad(resolvedAngle)) * radius
 
@@ -33,8 +36,17 @@ do
   end
 
   local function saveAngleFromCursor(button)
-    local minimapX, minimapY = Minimap:GetCenter()
     local cursorX, cursorY = GetCursorPosition()
+    if not wasDragged then
+      local dx = cursorX - dragStartX
+      local dy = cursorY - dragStartY
+      if (dx * dx + dy * dy) < DRAG_THRESHOLD_SQ then
+        return
+      end
+      wasDragged = true
+    end
+
+    local minimapX, minimapY = Minimap:GetCenter()
     local scale = UIParent:GetEffectiveScale()
 
     cursorX, cursorY = cursorX / scale, cursorY / scale
@@ -90,14 +102,16 @@ do
     highlight:SetAllPoints(button)
 
     button:SetScript("OnDragStart", function(self)
-      -- M11 ownership: keep this OnUpdate local.
-      -- Reason: angle update must follow cursor every frame while dragging.
+      wasDragged = false
+      dragStartX, dragStartY = GetCursorPosition()
       self:SetScript("OnUpdate", saveAngleFromCursor)
     end)
 
     button:SetScript("OnDragStop", function(self)
       self:SetScript("OnUpdate", nil)
-      saveAngleFromCursor(self)
+      if wasDragged then
+        saveAngleFromCursor(self)
+      end
     end)
 
     button:SetScript("OnEnter", function(self)
@@ -114,6 +128,11 @@ do
     end)
 
     button:SetScript("OnClick", function(_, mouseButton)
+      if wasDragged then
+        wasDragged = false
+        return
+      end
+
       if mouseButton == "RightButton" then
         if MultiBot.ToggleOptionsPanel then
           MultiBot.ToggleOptionsPanel()
